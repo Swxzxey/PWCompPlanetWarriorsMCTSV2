@@ -26,24 +26,16 @@ class UsefulAgentMethods {
         return myPlanets.count { p -> p.transporter?.destinationIndex == planet.id }
     }
 
-    //Same as before for enemy transporters.
-    fun enemyTransporterTravelling(planet: Planet, enemyPlanets: List<Planet>): Boolean {
-        return (enemyPlanets.any{it.transporter?.destinationIndex == planet.id })
-    }
-    //Same as before for enemy transporters.
-    fun enemyTransporterTravellingTotal(planet: Planet, enemyPlanets: List<Planet>): Int {
-        return enemyPlanets.count{p -> p.transporter?.destinationIndex == planet.id}
-    }
-    //Returns a list of the enemy planets who have sent transporters to the planet we input.
-    fun enemyTransporterTravellingFrom(planet: Planet, enemyPlanets: List<Planet>): List<Planet> {
-        return enemyPlanets.filter {p -> p.transporter?.destinationIndex == planet.id}
+    //Returns a list of the players planets who have sent transporters to the planet we input.
+    fun playerTransporterTravellingFrom(planet: Planet, myPlanets: List<Planet>): List<Planet> {
+        return myPlanets.filter {p -> p.transporter?.destinationIndex == planet.id}
     }
 
     //Takes the list of enemy planets who have sent transporters, returns a list of the weights of each transporter.
     // Using the map function, we map values from the input list to the ouput one, using the equation/values specified
     // in the {}.
-    fun enemyTransporterWeight(enemyTransporterPlanets: List<Planet>): List<Double?> {
-        return enemyTransporterPlanets.map{it.transporter?.nShips}
+    fun playerTransporterWeight(playerTransporterPlanets: List<Planet>): List<Double?> {
+        return playerTransporterPlanets.map{it.transporter?.nShips}
     }
 
     //Take list of enemy planets who have sent transporters, return the total weight of transporters
@@ -51,15 +43,28 @@ class UsefulAgentMethods {
     // sumOf will sum each element in the list according to the function {}.
     // we call it.transporter? as required since transporter is nullable and ? checks for null values.
     // we then take the nships to be added to the sum. ?: 0.0 means that for each null value, we replace it with 0.0.
-    fun enemyTransporterTotalWeight(enemyTransporterPlanets: List<Planet>): Double{
-        return enemyTransporterPlanets.sumOf{it.transporter?.nShips ?: 0.0}
+    fun playerTransporterTotalWeight(playerTransporterPlanets: List<Planet>): Double{
+        return playerTransporterPlanets.sumOf{it.transporter?.nShips ?: 0.0}
     }
 
-    //Collect list of enemy planets in the current game tick.
-    //Use gameState to look at all planets in game. Filter for the condition.
-    //Condition states if the owner of the planet == player's opponent, keep in list and return when done.
-    //fun listOfEnemyPlanets(player: PlanetWarsPlayer, gameState: gameState): List<Planet> {
-    //    return gameState.planets.filter{it.owner == player.opponent()}
-    //}
-    // Integrate this into agents directly, need the gameState and its list of planets in order to work
+    //Takes total weights of enemys and player transporters. Will minus enemy transporters from players to get net value on planet.
+    fun netPlanetTransporters(enemyTransporterPlanets: List<Planet>, myPlanets: List<Planet>): Double{
+        return (playerTransporterTotalWeight(myPlanets) - playerTransporterTotalWeight(enemyTransporterPlanets))
+    }
+
+    //Following method needs to be implemented within a subclass of a PlanetWarsAgent in order to access player variable.
+    //Takes all planets in game, the player of focus and the planet we want to target. We find all enemyPlanets, all player Planets.
+    //Compute amount to be the net weight between the players transporters going to the target (+) and the enemy transporters going to target (-)
+    // Return amount if it is less than or equal 0, in which we return a positive version of the amount + 1. Can alter the +1 later.
+    // Else we return 0 and dont want to send.
+    fun amountToSend(planets: List<Planet>, player1: PlanetWarsPlayer, target: Planet): Double{
+        var enemyPlanets = planets.filter {it.owner == player1.player.opponent()}
+        var myPlanets = planets.filter {it.owner == player1.player}
+        var amount = 0.0
+        amount += netPlanetTransporters(playerTransporterTravellingFrom(target, enemyPlanets), playerTransporterTravellingFrom(target, myPlanets))
+        if (amount <= 0) {
+            return (amount*-1)+1
+        }
+        return 0.0
+    }
 }
