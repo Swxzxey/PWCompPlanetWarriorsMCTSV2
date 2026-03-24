@@ -203,7 +203,7 @@ class DefensiveReactiveAgent03() : PlanetWarsPlayer() { //New agent defined as s
 }
 
     fun main() {
-    val agent = DefensiveReactiveAgent()
+    val agent = DefensiveReactiveAgent03()
     agent.prepareToPlayAs(Player.Player1, GameParams())
     val gameState = GameStateFactory(GameParams()).createGame()
     val action = agent.getAction(gameState)
