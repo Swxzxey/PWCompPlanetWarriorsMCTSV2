@@ -1,37 +1,34 @@
-package games.planetwars.agents.GroupNAgents
+package games.planetwars.agents.GroupNAgents.DefensiveReactiveAgent
 
 import games.planetwars.agents.Action
 import games.planetwars.agents.PlanetWarsPlayer
 import games.planetwars.core.*
 import kotlin.math.*
 
-class DefensiveReactiveAgent03() : PlanetWarsPlayer() { //New agent defined as subclass of PlanetWarsPlayer()
+class DefensiveReactiveAgent02() : PlanetWarsPlayer() { //New agent defined as subclass of PlanetWarsPlayer()
     private val halfwayLine = params.width / 2 //Get the halfway line of the game space to determine which side we are defending
 
     override fun getAction(gameState: GameState): Action { //Override getAction from original class, pass gameState in and return action.
-        /*
-        v0.3 - Updated attacking strategy. Will prioritise attacking the nearest enemy with low planets
-        via a heuristic calculation. Also created new methods for help with optimising ships sent.
+        //
+        // This agent has no random chance. This agent was based off of the DefensiveRandomAgent.
+        // It is made to choose the source as the planet with the most ships out of the ones owned.
+        // The target is to be determined by multiple arguments.
+        // We first go through all neutral planets on our side and capture any remaining,
+        // we then go through a list of all of our owned planets and find if any of the planets on our side are going to be taken over by the enemy
+        // (judged by net transporter weights being sent to planet stored in a HashMap),
+        // we will target it with optimal amount of ships. Otherwise, we will attack
+        // an enemy planet already on our side, or, choose a target enemy on the other side.
+        // This enemy is decided via heuristic, we want to attack a close and small planet.
+        //
+        //
+        // v0.2 - Faster initialisation of half and otherHalf planets for use in decision-making
+        // Changed net transporter weight storage for all planets to a hashMap system.
+        //
+        // Agent issues:
+        // - All attack the same neutral planet too much.
+        // - All attack the same enemy planets too much.
+        // - Need to account better for travel time.
 
-        This agent was built based off of the Defensive Random Agent.
-        This agent is made to choose the source as the planet with the most ships out of the ones owned.
-        The target is to be determined by multiple arguments:
-            - We first go through all neutral planets on our side and capture any remaining.
-            - We then go through a list of all of our owned planets and find if any of the planets on our side are going to be taken over by the enemy
-              (judged by net transporter weights being sent to planet stored in a HashMap).
-            - We will target it with optimal amount of ships. Otherwise, we will attack.
-            - We attack an enemy planet already on our side, or, choose a target enemy on the other side.
-            - The enemy on our side is attacked via a search for the minimum distance between the source and planet.
-            - The enemy on the other side is attacked via a search for the planet with the lowest heuristic score
-              which is based on distance and net ships for the planet.
-
-        Agent issues:
-            - All attack the same neutral planet too much. (Need to alter neutral planet targeting so stop attacking once enough is sent).
-            - All attack the same enemy planets too much. (Fixed)
-            - Need to account better for travel time. (Calculate potential ship gain for target based on time to reach and growthRate)
-            - Need to optimise attacking, will change the source in order to do this. Source choice based on distance to target + ships.
-            - Need to capture neutral planets at start against aggresive planets.
-        */
 
 
         //Define planets on our side. Defined values for half/otherHalf planets as ArrayLists to be altered.
@@ -54,6 +51,9 @@ class DefensiveReactiveAgent03() : PlanetWarsPlayer() { //New agent defined as s
         }
 
 
+        // Define source if we are calculating optimal source later.
+        // var source: Planet
+
         // Identify owned planets not currently in-action
         var myPlanets = gameState.planets.filter{ it.owner == player && it.transporter == null} //Identify planets owned by player not doing an action
 
@@ -75,8 +75,21 @@ class DefensiveReactiveAgent03() : PlanetWarsPlayer() { //New agent defined as s
         // Remove source from decision-making.
         myPlanets = myPlanets.filter{it != source}
 
+
+        // Define neutral planets
+        val neutralPlanets = halfPlanets.filter{it.owner == Player.Neutral}
+
+        // At start of game, prioritise close neutralPlanets. Capture using optimal amount of ships or current ships/2.
+        if (gameState.gameTick <= 100) {
+            if (! neutralPlanets.isEmpty()) {
+                val neutralTarget = neutralPlanets.minBy{it.position.distance(source.position)}
+                return Action(player, source.id, neutralTarget.id, getShipsToSend(neutralTarget.nShips+1, source))
+            }
+        }
+
         // Identify our Planets in action.
         val myAttackingPlanets = gameState.planets.filter{it.owner == player && it.transporter != null && it != source}
+
 
         // AI suggested inclusion / fix
         // Create a hashmap which uses planets as keys and a default 0.0 as values.
@@ -122,12 +135,10 @@ class DefensiveReactiveAgent03() : PlanetWarsPlayer() { //New agent defined as s
             }
         }
 
-        // Define neutral planets
-        val myNeutralPlanets = halfPlanets.filter{it.owner == Player.Neutral}
 
         // If there is no attacks to defend, we then check for neutral planets on our side of the field, if there are any neutral planets, we capture.
-        if (! myNeutralPlanets.isEmpty()) {
-            val target = myNeutralPlanets.minBy{it.position.distance(source.position) / it.growthRate}
+        if (! neutralPlanets.isEmpty()) {
+            val target = neutralPlanets.minBy{it.position.distance(source.position) / it.growthRate}
             return Action(player, source.id, target.id, getShipsToSend((target.nShips+1), source))
         }
 
@@ -136,6 +147,9 @@ class DefensiveReactiveAgent03() : PlanetWarsPlayer() { //New agent defined as s
 
         // Filter for enemies on our side.
         val enemyOnPlayerSide = halfPlanets.filter{it.owner == player.opponent()}
+
+        // source choice if we alter when source is chosen for defence.
+        // source = myPlanets.maxBy{it.nShips}
 
         // If there are enemies on our side, prioritise their capture to stop enemies taking our planets.
         if (! enemyOnPlayerSide.isEmpty()) {
@@ -164,46 +178,39 @@ class DefensiveReactiveAgent03() : PlanetWarsPlayer() { //New agent defined as s
 
             // Want to store the heuristically best target. This will be based on the net ships of the
             // current planet and the distance from the source to that planet, we want to minimise both values.
-            if (incomingNet < 0 && getHeuristicValue(incomingNet, checkDist) < getHeuristicValue(targetNet, targetDist)) {
+            if ( (incomingNet*(checkDist*0.5)) > (targetNet*(targetDist*0.5)) && incomingNet < 0) {
                 target = p
                 targetNet = incomingNet
                 targetDist = checkDist
             }
         }
         // Needed amount of ships to send should be the positive targetNet + 1
-        val ships: Double = getShipsToSend(target.nShips+3, source)
+        val ships: Double = getShipsToSend(target.nShips+1, source)
         if (ships == source.nShips/2) {
             // We want to only attack the enemy if we can safely capture. So, if we can't capture here, we will either do nothing or reinforce another planet.
-            // Want to reinforce ships that are ahead of this one.
             return Action.doNothing()
         }
         return Action(player, source.id, target.id, getShipsToSend((target.nShips+1), source))
         // Heuristics: distance, nShips, growthRate.
-        // Could calculate estimated planet ships total with time to get to target * growthRate?
 
     }
 
     // Repeated check for ships to send turned into a method.
     fun getShipsToSend(needed: Double, source: Planet): Double {
-        if (source.nShips >= needed) {
+        if (source.nShips > needed) {
             return needed
         }
         return source.nShips / 2
     }
 
-    // Calculate a score based on the input values.
-    fun getHeuristicValue(netShips: Double, distance: Double): Double {
-        return netShips + (distance * 0.5)
-    }
-
     override fun getAgentType(): String {
-        return "Defensive Random Agent 2.0"
+        return "Defensive Reactive Agent 0.2"
     }
 
 }
 
     fun main() {
-    val agent = DefensiveReactiveAgent03()
+    val agent = DefensiveReactiveAgent02()
     agent.prepareToPlayAs(Player.Player1, GameParams())
     val gameState = GameStateFactory(GameParams()).createGame()
     val action = agent.getAction(gameState)
