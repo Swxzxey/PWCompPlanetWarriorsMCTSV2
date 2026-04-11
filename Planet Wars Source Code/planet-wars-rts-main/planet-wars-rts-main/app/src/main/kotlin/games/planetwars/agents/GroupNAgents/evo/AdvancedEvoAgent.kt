@@ -1,6 +1,6 @@
 package games.planetwars.agents.GroupNAgents.evo
 
-import games.planetwars.agents.evo.GameStateWrapper
+//import games.planetwars.agents.evo.GameStateWrapper
 
 import games.planetwars.agents.Action
 import games.planetwars.agents.DoNothingAgent
@@ -125,7 +125,7 @@ data class AdvancedEvoAgent(
             val scores = evalSeq(gameState, solution)
             bestSolution = ScoredSolution(scores.score + ecoWeight * scores.growthRate, solution)
         } else {
-            val nextSeq = shiftLeftAndRandomAppend(bestSolution!!.solution, GameStateWrapper.shiftBy)
+            val nextSeq = shiftLeftAndRandomAppend(bestSolution!!.solution, AdvancedGameStateWrapper.shiftBy)
             val scores = evalSeq(gameState, nextSeq)
             bestSolution = ScoredSolution(scores.score + ecoWeight * scores.growthRate, nextSeq)
         }
