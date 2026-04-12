@@ -13,13 +13,18 @@ import games.planetwars.agents.evo.SimpleEvoAgent.ScoredSolution
 import games.planetwars.agents.random.BetterRandomAgent
 import games.planetwars.agents.random.CarefulRandomAgent
 import games.planetwars.core.*
+import kotlin.FloatArray
+import kotlin.Int
 import kotlin.random.Random
+
+data class initialModelDepth(val p: FloatArray, val length: Int)
 
 data class FinalGameStateWrapper(
     val gameState: GameState,
     val params: GameParams,
     val player: Player,
     val opponentModel: PlanetWarsAgent = DoNothingAgent(),
+    val initialModel: PlanetWarsAgent = DoNothingAgent(),
 ) {
     var forwardModel = AdvancedForwardModel(gameState, params)
 
@@ -62,6 +67,51 @@ data class FinalGameStateWrapper(
         return scoreDifference()
     }
 
+    fun initialForwardModel(seqLength: Int): initialModelDepth {
+        forwardModel = AdvancedForwardModel(gameState.deepCopy(), params)
+
+        val p = FloatArray(seqLength)
+        var ix = 0
+
+        while (!forwardModel.isTerminal() && ix < seqLength) {
+            val playerAction = initialModel.getAction(forwardModel.state.deepCopy())
+            val opponentAction = opponentModel.getAction(forwardModel.state.deepCopy())
+
+            val myPlanets = gameState.planets.filter { it.owner == player && it.transporter == null }
+            val otherPlanets = gameState.planets.filter { it.owner == player.opponent() || it.owner == Player.Neutral }
+
+
+            var from = 0
+            var to = 0
+            // inverse of the following:
+            //val source = myPlanets[(from * myPlanets.size).toInt()]
+            //val target = otherPlanets[(to * otherPlanets.size).toInt()]
+            for (i in 0 until myPlanets.size) {
+                if (playerAction.sourcePlanetId == myPlanets[i].id) {
+                    from = i / myPlanets.size
+                }
+            }
+            for (i in 0 until otherPlanets.size) {
+                if (playerAction.destinationPlanetId == otherPlanets[i].id) {
+                    to = i / otherPlanets.size
+                }
+            }
+
+            p[ix] = from.toFloat()
+            p[ix + 1] = to.toFloat()
+            p[ix + 2] = playerAction.numShips.toFloat()
+            ix += shiftBy
+
+            val actions = mapOf(
+                Player.Player1 to playerAction,
+                Player.Player2 to opponentAction,
+            )
+            forwardModel.step(actions)
+        }
+
+        return initialModelDepth(p, ix)
+    }
+
     fun scoreDifference(): Double {
         // allow standalone use of this as well
         return forwardModel.getShips(player) - forwardModel.getShips(player.opponent())
@@ -82,6 +132,7 @@ data class FinalAgent(
     var epsilon: Double = 1e-6,
     var timeLimitMillis: Long = 20,
     var opponentModel: PlanetWarsAgent = DoNothingAgent(),
+    var initialModel: PlanetWarsAgent = DefensiveReactiveAgent10(),
     var economyWeight: Double = 75.0,
     var ecoWeight: Double = economyWeight,
     var secondPart: Double = 0.35,
@@ -121,7 +172,7 @@ data class FinalAgent(
         }
 
         if (bestSolution == null || !useShiftBuffer) {
-            val solution = initialPoint()
+            val solution = initialPoint(gameState)
             val scores = evalSeq(gameState, solution)
             bestSolution = ScoredSolution(scores.score + ecoWeight * scores.growthRate, solution)
         } else {
@@ -178,10 +229,16 @@ data class FinalAgent(
     //    return p
     //}
 
-    private fun initialPoint(): FloatArray {
-        val p = FloatArray(sequenceLength)
+    private fun initialPoint(gameState: GameState): FloatArray {
+        //val p = FloatArray(sequenceLength)
         //var forwardModel = AdvancedForwardModel(gameState.deepCopy(), params)
-        for (i in p.indices) {
+        val wrapper = FinalGameStateWrapper(gameState, params, player, initialModel = initialModel)
+        val init = wrapper.initialForwardModel(sequenceLength)
+        val p = init.p
+        val length = init.length
+        //println(length)
+
+        for (i in length until p.size) {
             p[i] = random.nextFloat()
         }
         return p
