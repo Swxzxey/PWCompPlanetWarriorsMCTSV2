@@ -16,11 +16,11 @@ class MCTSAgent() : PlanetWarsPlayer() {
 
     // var bestMove = Action.doNothing()
     var opponentModel = DoNothingAgent()
-    val rolloutLength = 10
+    val rolloutLength = 200
     val epsilon = 1e-6
     val k = sqrt(2.0)
-    val maxTreeDepth = 100
-    val maxIterations = 200
+    val maxTreeDepth = 500
+    val maxIterations = 300
 
 
     // Future refinements:
@@ -32,38 +32,36 @@ class MCTSAgent() : PlanetWarsPlayer() {
 
     override fun getAction(gameState: GameState): Action {
         val state = gameState.deepCopy()
-        val root = TreeNode(state, null, null, mutableMapOf(), generateAvailableActions(state),0,0.0)
+        val root = TreeNode(state, null, null, mutableMapOf(), generateAvailableActions(state),1,0.0)
         mctsSearch(root)
-        val best = root.children.maxByOrNull { it.value.visits }?.key
-        return best ?: Action.doNothing()
+        val bestMove = root.children.maxByOrNull { it.value.visits }?.key
+        return bestMove ?: Action.doNothing()
     }
 
     fun generateAvailableActions(gameState: GameState): MutableList<Action> {
         val actions: MutableList<Action> = mutableListOf()
 
-        val myPlanets = gameState.planets.filter { it.owner == player && it.transporter == null }
+        var myPlanets = gameState.planets.filter { it.owner == player && it.transporter == null }
         if (myPlanets.isEmpty()) {
             return actions
         }
-        // Ideas for pruning search space - Take 5 planets with high growth rate to send from
-        // if (myPlanets.size > 5) {
-        //    myPlanets = myPlanets.sortedByDescending{it.growthRate}.take(5)
-        //}
-        val targetPlanets = gameState.planets.filter { it.owner == player.opponent() || it.owner == Player.Neutral }
+        // Ideas for pruning search space - once number of possible sources exceeds 10, pick from 5 with highest ships to send from
+        if (myPlanets.size >= 10) {
+            myPlanets = myPlanets.sortedByDescending{it.nShips}.take(5)
+        }
+        var targetPlanets = gameState.planets.filter { it.owner == player.opponent() || it.owner == Player.Neutral }
         if (targetPlanets.isEmpty()) {
             return actions
         }
-        // Same idea for opponent planets - pick 5 weakest opponent planets as potential targets
-        // if (targetPlanet.size > 5) {
-        //      targetPlanets = targetPlants.sortedBy { it.nShips }.take(5)
-        // }
-        val shipChoices = mutableListOf(0.25, 0.5, 0.75)
+        // Same idea for opponent planets - once number of possible targets exceeds 10, pick from 5 weakest potential targets
+        if (targetPlanets.size >= 10) {
+            targetPlanets = targetPlanets.sortedBy { it.nShips }.take(5)
+         }
+
 
         for (source in myPlanets) {
             for (target in targetPlanets) {
-                for (i in shipChoices) {
-                    actions.add(Action(player, source.id, target.id, source.nShips*i))
-                }
+                actions.add(Action(player, source.id, target.id, source.nShips/2))
             }
         }
         return actions
@@ -107,9 +105,14 @@ class MCTSAgent() : PlanetWarsPlayer() {
 
     fun treePolicy(node: TreeNode) : TreeNode {
         var current = node
-        val fm = MCTSForwardModel(current.state, params)
 
-        while (!fm.isTerminal() && current.depth < maxTreeDepth) {
+        while (current.depth < maxTreeDepth) {
+            val fm = MCTSForwardModel(current.state, params)
+
+            if (fm.isTerminal()) {
+                break
+            }
+
             if (current.availableActions.isNotEmpty()) {
                 // expand returns the new child
                 return expand(current)
@@ -151,18 +154,18 @@ class MCTSAgent() : PlanetWarsPlayer() {
     }
     fun rollout(node: TreeNode) : Double {
         var rolloutDepth = 0
-        var rolloutState = node.state.deepCopy()
+        val rolloutState = node.state.deepCopy()
         val forwardModel = MCTSForwardModel(rolloutState, params)
 
         if (rolloutLength > 0) {
             while (!finishRollout(forwardModel, rolloutDepth)) {
-                var actions = generateAvailableActions(rolloutState)
-                val chosen: Action
+                val actions = generateAvailableActions(rolloutState)
+                val chosen: Action =
                 if (actions.isEmpty()) {
-                    chosen = Action.doNothing()
+                    Action.doNothing()
                 }
                 else {
-                    chosen = actions[Random.nextInt(actions.size)]
+                    actions[Random.nextInt(actions.size)]
                 }
                 val opponentAction = opponentModel.getAction(rolloutState)
 
@@ -170,7 +173,7 @@ class MCTSAgent() : PlanetWarsPlayer() {
                 rolloutDepth++
             }
         }
-        return forwardModel.getShips(player) - forwardModel.getShips(player.opponent()) + 5 * (forwardModel.getPlanets(player) - forwardModel.getPlanets(player.opponent()))
+        return forwardModel.getShips(player) - forwardModel.getShips(player.opponent()) + 5 * (forwardModel.getGrowthRate(player) - forwardModel.getGrowthRate(player.opponent())) + (forwardModel.getPlanets(player) - forwardModel.getPlanets(player.opponent()))
     }
 
     fun finishRollout(fm: MCTSForwardModel, depth: Int) : Boolean{
