@@ -74,7 +74,7 @@ data class AdvancedGameStateWrapper(
 
 data class AdvancedEvoAgent(
     var flipAtLeastOneValue: Boolean = true,
-    var probMutation: Double = 0.5,
+    var probMutation: Double = 0.25,
     //var sequenceLength: Int = 200,
     var sequenceLength: Int = 600,
     var nEvals: Int = 20,
@@ -143,9 +143,9 @@ data class AdvancedEvoAgent(
 
         val wrapper = AdvancedGameStateWrapper(gameState, params, player)
         val action = wrapper.getAction(gameState, bestSolution!!.solution[0], bestSolution!!.solution[1], bestSolution!!.solution[2])
-        if (action.numShips < 1.0) {
-            return Action.doNothing()
-        }
+        //if (action.numShips < 1.0) {
+        //    return Action.doNothing()
+        //}
         return action
     }
 
