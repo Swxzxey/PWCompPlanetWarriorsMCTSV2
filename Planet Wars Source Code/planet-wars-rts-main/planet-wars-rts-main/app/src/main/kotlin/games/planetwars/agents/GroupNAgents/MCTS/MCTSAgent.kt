@@ -20,8 +20,8 @@ class MCTSAgent() : PlanetWarsPlayer() {
     val epsilon = 1e-6
     val k = sqrt(2.0)
     val maxTreeDepth = 500
-    val maxIterations = 350
-
+    val timeLimitMillis = 30
+    var numIters = 0
 
     // Future refinements:
     // 1. Prune the search space of possible actions to consider more logical/informed actions rather than every possible action
@@ -31,10 +31,12 @@ class MCTSAgent() : PlanetWarsPlayer() {
     // e.g. val rnd = Random(123456)
 
     override fun getAction(gameState: GameState): Action {
+        numIters = 0
         val state = gameState.deepCopy()
         val root = TreeNode(state, null, null, mutableMapOf(), generateAvailableActions(state),1,0.0)
         mctsSearch(root)
         val bestMove = root.children.maxByOrNull { it.value.visits }?.key
+        println("Iterations - $numIters")
         return bestMove ?: Action.doNothing()
     }
 
@@ -84,8 +86,7 @@ class MCTSAgent() : PlanetWarsPlayer() {
     }
 
     fun mctsSearch(node: TreeNode) {
-        var numIters = 0
-
+        val time = System.currentTimeMillis()
         var stop = false
 
         while (!stop) {
@@ -94,7 +95,8 @@ class MCTSAgent() : PlanetWarsPlayer() {
             backup(selected, delta)
             numIters++
 
-            stop = numIters >= maxIterations
+            val elapsed = System.currentTimeMillis() - time
+            stop = elapsed >= timeLimitMillis
         }
 
     }
