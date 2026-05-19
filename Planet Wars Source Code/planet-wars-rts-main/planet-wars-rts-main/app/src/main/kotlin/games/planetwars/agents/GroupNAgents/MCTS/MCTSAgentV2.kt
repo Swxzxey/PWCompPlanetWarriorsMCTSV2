@@ -19,16 +19,9 @@ class MCTSAgentV2() : PlanetWarsPlayer() {
     val epsilon = 1e-6
     val k = sqrt(2.0)
     val maxTreeDepth = 1000
-    val timeLimitMillis = 20
+    val timeLimitMillis = 48
     // For testing/debugging purposes - track number of iterations per tick/move
     // var numIters = 0
-
-    // Future refinements:
-    // 1.  Improve rollout policy
-    // 2. Implement time limit instead of max iterations limit
-    // e.g. val timeBudget = 10 (ms)
-    // 3. Use random seed for better consistency
-    // e.g. val rnd = Random(123456)
 
     override fun getAction(gameState: GameState): Action {
         //numIters = 0
