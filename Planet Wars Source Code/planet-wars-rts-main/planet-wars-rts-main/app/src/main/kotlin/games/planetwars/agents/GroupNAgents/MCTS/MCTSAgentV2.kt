@@ -1,13 +1,11 @@
 package games.planetwars.agents.GroupNAgents.MCTS
 
-import competition_entry.GreedyHeuristicAgent
 import games.planetwars.agents.Action
 import games.planetwars.agents.DoNothingAgent
+import games.planetwars.agents.GroupNAgents.DefensiveReactiveAgent.DefensiveReactiveAgent11
 import games.planetwars.agents.PlanetWarsPlayer
 import games.planetwars.agents.random.CarefulRandomAgent
 import games.planetwars.core.*
-import jdk.jfr.internal.Cutoff.INFINITY
-import org.checkerframework.checker.units.qual.A
 import java.lang.Double.NEGATIVE_INFINITY
 import kotlin.math.ln
 import kotlin.math.sqrt
@@ -22,10 +20,11 @@ class MCTSAgentV2() : PlanetWarsPlayer() {
     val k = sqrt(2.0)
     val maxTreeDepth = 1000
     val timeLimitMillis = 20
-    var numIters = 0
+    // For testing/debugging purposes - track number of iterations per tick/move
+    // var numIters = 0
 
     // Future refinements:
-    // 1. Prune the search space of possible actions to consider more logical/informed actions rather than every possible action
+    // 1.  Improve rollout policy
     // 2. Implement time limit instead of max iterations limit
     // e.g. val timeBudget = 10 (ms)
     // 3. Use random seed for better consistency
@@ -45,25 +44,29 @@ class MCTSAgentV2() : PlanetWarsPlayer() {
     fun generateAvailableActions(gameState: GameState): MutableList<Action> {
         val actions: MutableList<Action> = mutableListOf(Action.doNothing())
 
-        var myPlanets = gameState.planets.filter { it.owner == player && it.transporter == null }
+        val myPlanets = gameState.planets.filter { it.owner == player && it.transporter == null }
         if (myPlanets.isEmpty()) {
             return actions
         }
 
-        var targetPlanets = gameState.planets.filter { it.owner == player.opponent() || it.owner == Player.Neutral }
+        val targetPlanets = gameState.planets.filter { it.owner == player.opponent() || it.owner == Player.Neutral }
         if (targetPlanets.isEmpty()) {
             return actions
         }
-        if (targetPlanets.size >= 5) {
-            targetPlanets = targetPlanets.sortedByDescending { it.growthRate * 50 / (it.nShips + 1) }.take(5)
-        }
 
-        val shipValues = mutableListOf(0.5, 0.75)
+        val shipValues = listOf(0.5, 0.75)
 
         for (source in myPlanets) {
             for (target in targetPlanets) {
                 for (fract in shipValues) {
-                    actions.add(Action(player, source.id, target.id, source.nShips * fract))
+                    val shipsToSend = source.nShips*fract
+                    if (shipsToSend < 3) {
+                        continue
+                    }
+                    if (target.owner == Player.Neutral && shipsToSend < target.nShips) {
+                        continue
+                    }
+                    actions.add(Action(player, source.id, target.id, shipsToSend))
                 }
             }
         }
@@ -170,13 +173,13 @@ class MCTSAgentV2() : PlanetWarsPlayer() {
                     else {
                         actions[Random.nextInt(actions.size)]
                     }
-                val opponentAction = opponentModel.getAction(rolloutState)
+                val opponentAction = opponentModel.getAction(forwardModel.state)
 
                 forwardModel.step(mapOf(player to chosen, player.opponent() to opponentAction))
                 rolloutDepth++
             }
         }
-        return (2 * (forwardModel.getShips(player) - forwardModel.getShips(player.opponent()))) + (10 * (forwardModel.getGrowthRate(player) - forwardModel.getGrowthRate(player.opponent()))) + (3 * (forwardModel.getPlanets(player) - forwardModel.getPlanets(player.opponent())))
+        return (forwardModel.getShips(player) - forwardModel.getShips(player.opponent())) + (20 * (forwardModel.getGrowthRate(player) - forwardModel.getGrowthRate(player.opponent()))) + (forwardModel.getPlanets(player) - forwardModel.getPlanets(player.opponent()))
     }
 
     fun finishRollout(fm: MCTSForwardModel, depth: Int) : Boolean{
@@ -198,6 +201,12 @@ class MCTSAgentV2() : PlanetWarsPlayer() {
 
     override fun getAgentType(): String {
         return "MCTS Agent V2"
+    }
+
+    override fun prepareToPlayAs(player: Player, params: GameParams, opponent: String?): String {
+        super.prepareToPlayAs(player, params, opponent)
+        opponentModel.prepareToPlayAs(player.opponent(), params)
+        return getAgentType()
     }
 }
 
