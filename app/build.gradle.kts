@@ -88,7 +88,7 @@ tasks.named("check") {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21) // Java 21 LTS - best compatibility
+        languageVersion = JavaLanguageVersion.of(20) // Java 21 LTS - best compatibility
     }
 }
 
@@ -97,7 +97,7 @@ application {
 }
 
 kotlin {
-    jvmToolchain(21) // Ensure Kotlin targets JVM 21 as well
+    jvmToolchain(20) // Ensure Kotlin targets JVM 21 as well
 }
 
 tasks.register<JavaExec>("runEvaluation") {
